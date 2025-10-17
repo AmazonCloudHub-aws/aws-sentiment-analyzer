@@ -1,69 +1,146 @@
+<!--
+Updated README: includes quickstart, security steps, packaging guidance and
+links to the architecture diagram. Keep sensitive instructions in the
+security section and do not commit secrets to the repository.
+-->
+
 # AWS Sentiment Analysis Pipeline
 
-## Overview
+A Terraform + AWS Lambda pipeline that collects Reddit data, processes it,
+and runs sentiment analysis using Amazon Comprehend. This repository contains
+infrastructure (Terraform) and Lambda code used for data collection,
+processing, and basic visualization with QuickSight.
 
-This repository contains an automated sentiment analysis pipeline built on AWS, designed to process and analyze customer feedback from multiple sources. The project leverages AWS services (Lambda, S3, Comprehend) and Terraform for infrastructure as code.
+## Quick highlights
+- Data collection: Reddit (PRAW) and optional Amazon Reviews dataset
+- Processing: AWS Lambda functions
+- Analysis: Amazon Comprehend (document classifier & DetectSentiment)
+- Storage: S3 (raw and processed buckets)
+- IaC: Terraform
 
-## Key Features
+---
 
-- **Multi-Source Data Collection**: 
-  - Reddit API integration
-  - Amazon Customer Reviews Dataset processing
+## Quickstart (developer)
 
-- **AWS-Powered Analysis**:
-  - Sentiment analysis using Amazon Comprehend
-  - Automated data processing with AWS Lambda
-  - Scalable data storage in Amazon S3
+1. Clone the repo:
 
-- **Infrastructure Management**:
-  - Infrastructure as Code using Terraform
-  - Easy deployment and scaling
+```bash
+git clone git@github.com:AmazonCloudHub-aws/aws-sentiment-analyzer.git
+cd aws-sentiment-analyzer
+```
 
-- **Visualization**:
-  - Data insights through Amazon QuickSight
+2. Secure your secrets *outside* the repo (do NOT commit them):
 
-## Use Case
+- Create `terraform/backend.tf.local` with your S3/DynamoDB backend (see `terraform/backend.tf`).
+- Store Reddit credentials in AWS Secrets Manager or pass them via your CI environment.
 
-This project is ideal for businesses and researchers looking to gain insights from diverse customer feedback sources. It demonstrates:
+3. Produce lambda artifacts (locally or in CI):
 
-- Cloud-based natural language processing
-- Data engineering best practices
-- Infrastructure automation
+```bash
+./deploy_lambdas.sh
+```
 
-## Getting Started
+4. Initialize Terraform with your local backend and plan:
 
-1. Clone this repository
-2. Follow the setup instructions in [SETUP.md](SETUP.md)
-3. Configure your AWS credentials
-4. Run Terraform to deploy the infrastructure
+```bash
+terraform init -backend-config=terraform/backend.tf.local
+terraform plan
+# Review the plan and then apply in a controlled account
+terraform apply
+```
 
-## Project Structure
+---
+
+## Security & housekeeping (must-read before pushing)
+
+1. Rotate exposed keys immediately if they were ever committed.
+2. Stop tracking local state/files and remove them from the index:
+
+```bash
+git rm --cached terraform/terraform.tfstate terraform/terraform.tfstate.backup terraform/terraform.tfvars || true
+git add .gitignore
+git commit -m "Ignore terraform state/vars and lambda artifacts"
+```
+
+3. Purge secrets from git history (work on a clone/mirror):
+
+- Recommended: `git-filter-repo` — follow its documentation and test on a mirror before force-pushing.
+- Alternative: BFG Repo-Cleaner.
+
+4. Migrate state to a remote backend (create the S3 bucket + DynamoDB table first), then run:
+
+```bash
+terraform init -migrate-state -backend-config=terraform/backend.tf.local
+```
+
+5. Packaging: do not commit third-party libraries. Use a build script or CI to produce zip artifacts. Use Lambda Layers for shared dependencies.
+
+---
+
+## Project layout
 
 ```
 .
-├── terraform/           # Terraform configuration files
-├── lambda/              # Lambda function code
-│   ├── reddit_collector/
-│   └── sentiment_analyzer/
-├── scripts/             # Utility scripts
-├── docs/                # Documentation
-└── README.md            # This file
+├── terraform/                # Terraform configuration
+├── terraform/lambda/         # Lambda source folders and produced zip artifacts
+├── deploy_lambdas.sh         # Packaging helper (produces terraform/lambda/*.zip)
+├── docs/                     # Documentation (architecture diagram)
+└── README.md
 ```
 
-## Contributing
+## Architecture diagram
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+See `docs/architecture.md` (Mermaid) for a diagram of components and data flow.
+
+---
+
+## Next steps / TODO
+
+- Remove vendored libraries from `terraform/lambda/` and adopt CI packaging
+- Add GitHub Actions that build lambdas, run `terraform fmt`/`validate`, and plan in a non-prod account
+- Move secrets into Secrets Manager or Parameter Store and reference them from Terraform
+
+### Artifact bucket & IAM
+
+CI uploads lambda artifacts to an S3 bucket. Create a bucket and grant the CI user (or role) PutObject permissions. Example Terraform snippet to create the artifact bucket:
+
+```hcl
+resource "aws_s3_bucket" "lambda_artifacts" {
+	bucket = "aws-sentiment-analyzer-lambda-artifacts"
+	acl    = "private"
+	server_side_encryption_configuration {
+		rule {
+			apply_server_side_encryption_by_default {
+				sse_algorithm = "AES256"
+			}
+		}
+	}
+}
+```
+
+Example minimal IAM policy for the CI user (grant PutObject/GetObject/ListBucket on the artifact bucket and DynamoDB/Put for state migration as needed):
+
+```json
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Effect": "Allow",
+			"Action": [
+				"s3:PutObject",
+				"s3:GetObject",
+				"s3:ListBucket"
+			],
+			"Resource": [
+				"arn:aws:s3:::aws-sentiment-analyzer-lambda-artifacts",
+				"arn:aws:s3:::aws-sentiment-analyzer-lambda-artifacts/*"
+			]
+		}
+	]
+}
+```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT
 
-## Acknowledgments
-
-- Reddit API for providing access to public discussions
-- Amazon Web Services for their comprehensive cloud offerings
-- Open-source community for various tools and libraries used in this project
-
-## Tags
-
-#AWS #SentimentAnalysis #NLP #Terraform #DataEngineering #Python #Lambda

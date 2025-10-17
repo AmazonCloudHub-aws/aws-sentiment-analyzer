@@ -4,6 +4,30 @@ provider "aws" {
   region = var.aws_region
 }
 
+# Variables for lambda artifact locations (S3 URIs written by CI)
+variable "reddit_collector_zip" {
+  type = string
+  description = "S3 URI for reddit_collector zip (s3://bucket/prefix/reddit_collector.zip)"
+  default = ""
+}
+
+variable "sentiment_analyzer_zip" {
+  type = string
+  description = "S3 URI for sentiment_analyzer zip (s3://bucket/prefix/sentiment_analyzer.zip)"
+  default = ""
+}
+
+# Parse S3 URIs into bucket/key using a simple local expression
+locals {
+  reddit_parts = split("/", replace(var.reddit_collector_zip, "s3://", ""))
+  reddit_bucket = length(local.reddit_parts) > 0 ? local.reddit_parts[0] : null
+  reddit_key = length(local.reddit_parts) > 1 ? join("/", slice(local.reddit_parts, 1, length(local.reddit_parts))) : null
+
+  sentiment_parts = split("/", replace(var.sentiment_analyzer_zip, "s3://", ""))
+  sentiment_bucket = length(local.sentiment_parts) > 0 ? local.sentiment_parts[0] : null
+  sentiment_key = length(local.sentiment_parts) > 1 ? join("/", slice(local.sentiment_parts, 1, length(local.sentiment_parts))) : null
+}
+
 resource "aws_s3_bucket" "sentiment_data" {
   bucket = "${var.project_name}-sentiment-data"
 }
@@ -31,27 +55,34 @@ resource "aws_iam_role_policy" "lambda_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
         Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:ListBucket",
-          "comprehend:DetectSentiment"
+          "comprehend:DetectSentiment",
+          "comprehend:DetectDominantLanguage",
+          # other Comprehend actions you need
         ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+      {
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Effect = "Allow"
         Resource = [
           aws_s3_bucket.sentiment_data.arn,
-          "${aws_s3_bucket.sentiment_data.arn}/*",
-          "arn:aws:s3:::amazon-reviews-pds",
-          "arn:aws:s3:::amazon-reviews-pds/*"
+          "${aws_s3_bucket.sentiment_data.arn}/*"
         ]
       },
       {
-        Effect = "Allow"
         Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
+        Effect   = "Allow"
         Resource = "arn:aws:logs:*:*:*"
       }
     ]
@@ -59,16 +90,18 @@ resource "aws_iam_role_policy" "lambda_policy" {
 }
 
 resource "aws_lambda_function" "reddit_collector" {
-  filename      = abspath("${path.module}/lambda/reddit_collector.zip")
   function_name = "${var.project_name}-reddit-collector"
   role          = aws_iam_role.lambda_role.arn
   handler       = "reddit_collector.lambda_handler"
-  runtime       = "python3.8"
+  runtime       = "python3.11"
+
+  s3_bucket = local.reddit_bucket
+  s3_key    = local.reddit_key
 
   environment {
     variables = {
       S3_BUCKET         = aws_s3_bucket.sentiment_data.id
-      DATA_FOLDER       = "raw_data/reddit/"  # Store Reddit data in raw_data/reddit/
+      DATA_FOLDER       = "raw_data/reddit/"
       REDDIT_CLIENT_ID  = var.reddit_client_id
       REDDIT_CLIENT_SECRET = var.reddit_client_secret
     }
@@ -77,11 +110,13 @@ resource "aws_lambda_function" "reddit_collector" {
 
 
 resource "aws_lambda_function" "sentiment_analyzer" {
-  filename      = abspath("${path.module}/lambda/sentiment_analyzer.zip")
   function_name = "${var.project_name}-sentiment-analyzer"
   role          = aws_iam_role.lambda_role.arn
   handler       = "sentiment_analyzer.lambda_handler"
-  runtime       = "python3.8"
+  runtime       = "python3.11"
+
+  s3_bucket = local.sentiment_bucket
+  s3_key    = local.sentiment_key
 
   environment {
     variables = {

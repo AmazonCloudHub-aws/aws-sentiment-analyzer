@@ -19,9 +19,8 @@ output "sentiment_analyzer_lambda_arn" {
 output "lambda_function_names" {
   description = "The names of the Lambda functions"
   value = {
-    reddit_collector  = aws_lambda_function.reddit_collector.function_name
-    sentiment_analyzer = aws_lambda_function.sentiment_analyzer.function_name
-    sentiment_analyzer    = aws_lambda_function.sentiment_analyzer.function_name
+    reddit_collector    = aws_lambda_function.reddit_collector.function_name
+    sentiment_analyzer  = aws_lambda_function.sentiment_analyzer.function_name
   }
 }
 
