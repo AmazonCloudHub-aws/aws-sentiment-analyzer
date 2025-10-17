@@ -5,8 +5,8 @@ This document contains a Mermaid diagram describing the high-level architecture 
 ```mermaid
 flowchart TD
   subgraph DataSources[Data Sources]
-    Reddit[Reddit API]
-    Reviews[Amazon Reviews (optional)]
+    Reddit["Reddit API"]
+    Reviews["Amazon Reviews (optional)"]
   end
 
   subgraph Ingestion[Ingestion]
@@ -14,8 +14,8 @@ flowchart TD
   end
 
   subgraph Storage[S3]
-  RawBucket[(s3://sentiment-analysis-sentiment-data/raw_data/)]
-  ProcessedBucket[(s3://sentiment-analysis-sentiment-data/processed_data/)]
+    RawBucket["s3://sentiment-analysis-sentiment-data/raw_data/"]
+    ProcessedBucket["s3://sentiment-analysis-sentiment-data/processed_data/"]
   end
 
   subgraph Processing[Processing]
