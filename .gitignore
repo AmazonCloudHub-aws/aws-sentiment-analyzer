@@ -70,3 +70,9 @@ terraform/lambda/reddit_collector/websocket_client-1.8.0.dist-info/METADATA
 terraform/lambda/reddit_collector/websocket_client-1.8.0.dist-info/RECORD
 terraform/lambda/reddit_collector/websocket_client-1.8.0.dist-info/top_level.txt
 terraform/lambda/reddit_collector/websocket_client-1.8.0.dist-info/WHEEL
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
